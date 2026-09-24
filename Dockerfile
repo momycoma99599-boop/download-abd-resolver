@@ -12,11 +12,10 @@ COPY package*.json ./
 
 RUN npm install --omit=dev
 
-# نسخ كل الملفات والمجلدات مباشرة
 COPY . .
 
 ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000
 
-CMD ["node", "src/index.js"]
+CMD ["node", "index.js"]
