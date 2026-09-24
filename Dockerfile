@@ -12,6 +12,7 @@ COPY package*.json ./
 
 RUN npm install --omit=dev
 
+# نسخ كل الملفات والمجلدات مباشرة
 COPY . .
 
 ENV NODE_ENV=production
