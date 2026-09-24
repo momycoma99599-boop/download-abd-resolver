@@ -3,6 +3,7 @@ import youtubeDl from "youtube-dl-exec";
 
 const app = express();
 app.use(express.json({ limit: "1mb" }));
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   res.setHeader("Access-Control-Allow-Origin", origin || "*");
@@ -11,21 +12,26 @@ app.use((req, res, next) => {
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+
 const allowedProtocols = new Set(["http:", "https:"]);
 const qualities = new Set(["best", "1080p", "720p", "480p", "360p", "144p"]);
+
 function validateUrl(value) {
   if (typeof value !== "string" || value.length === 0 || value.length > 4096) throw new Error("الرابط غير صالح");
   const parsed = new URL(value);
   if (!allowedProtocols.has(parsed.protocol) || parsed.username || parsed.password) throw new Error("يسمح فقط برابط http أو https صالح");
   return parsed.toString();
 }
+
 function formatFor(kind, quality) {
   if (kind === "audio") return "bestaudio[ext=m4a]/bestaudio/best";
   if (quality === "best") return "best[ext=mp4]/best";
   const height = Number.parseInt(quality, 10);
   return Number.isFinite(height) ? `best[height<=${height}][ext=mp4]/best[height<=${height}]/best` : "best[ext=mp4]/best";
 }
+
 app.get("/api/health", (_req, res) => res.json({ ok: true, service: "download-abd-resolver" }));
+
 app.post("/api/resolve", async (req, res) => {
   try {
     const { url: input, format = "video", quality = "best", allowAgeRestricted = false } = req.body || {};
@@ -43,6 +49,33 @@ app.post("/api/resolve", async (req, res) => {
     res.status(422).json({ error: message });
   }
 });
+
+// المسار الجديد الخاص بقوائم التشغيل
+app.post("/api/resolve-playlist", async (req, res) => {
+  try {
+    const { url: input } = req.body || {};
+    const url = validateUrl(input);
+    const info = await youtubeDl(url, { dumpSingleJson: true, flatPlaylist: true, noWarnings: true, skipDownload: true, socketTimeout: 25, retries: 2 });
+    
+    const entries = Array.isArray(info?.entries) ? info.entries : [];
+    const videos = entries.map((e, index) => ({
+      id: e.id || String(index),
+      title: e.title || `فيديو ${index + 1}`,
+      url: e.url || (e.id ? `https://www.youtube.com/watch?v=${e.id}` : null),
+      duration: e.duration || null
+    })).filter(v => v.url);
+
+    res.json({
+      title: info?.title || "قائمة تشغيل",
+      count: videos.length,
+      videos
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "تعذر تحليل قائمة التشغيل";
+    console.error("[resolve-playlist]", message);
+    res.status(422).json({ error: message });
+  }
+});
+
 const port = Number(process.env.PORT || 3000);
 app.listen(port, "0.0.0.0", () => console.log(`Download ABD resolver listening on ${port}`));
-
